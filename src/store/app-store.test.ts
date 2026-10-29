@@ -43,7 +43,23 @@ describe("app store workflows", () => {
     const oldScore = calculateDailyScore(state.tasks.filter((item) => item.date === "2026-10-25"));
     const newScore = calculateDailyScore(state.tasks.filter((item) => item.date === "2026-10-26"));
     expect(oldScore.earned).toBe(0);
-    expect(newScore.earned).toBe(20);
+    expect(newScore.percent).toBe(100);
+  });
+
+  it("derives task progress from its checklist", () => {
+    const id = useAppStore.getState().addTask({
+      title: "Chạy pipeline",
+      date: "2026-10-25",
+      priority: "important",
+      isBinary: false,
+      checklist: ["Chuẩn bị dữ liệu", "Chạy model", "Đánh giá"],
+    });
+    const firstItem = useAppStore.getState().tasks.find((item) => item.id === id)!.checklist![0];
+    useAppStore.getState().toggleTaskChecklistItem(id, firstItem.id);
+
+    const updated = useAppStore.getState().tasks.find((item) => item.id === id)!;
+    expect(updated.progress).toBeCloseTo(100 / 3);
+    expect(calculateDailyScore([updated]).percent).toBeCloseTo(100 / 3);
   });
 
   it("does not replace current state when an import is invalid", () => {

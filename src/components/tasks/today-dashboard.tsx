@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { differenceInCalendarDays, format } from "date-fns";
 import { vi } from "date-fns/locale";
-import { Flame, SlidersHorizontal } from "lucide-react";
+import { CheckCircle2, Flame, SlidersHorizontal } from "lucide-react";
 import { QuickCheckpointCard } from "@/components/checkpoint/quick-checkpoint-card";
 import { PageHeader } from "@/components/ui/page-header";
 import { ProgressBar } from "@/components/ui/progress-bar";
@@ -15,12 +16,19 @@ import { calculateDailyScore } from "@/domain/scoring";
 import { buildDailyInsights } from "@/domain/insights";
 import { chooseMotivation } from "@/domain/motivation";
 import { goalProgress } from "@/domain/goals";
-import { isHabitDue } from "@/domain/scheduling";
+import { habitNameForDate, isHabitDue } from "@/domain/scheduling";
 import { activityStreak } from "@/domain/streaks";
 import { fromDateKey, toDateKey } from "@/lib/dates";
+import { formatPercent } from "@/lib/numbers";
 import { useAppStore } from "@/store/app-store";
 
 export function TodayDashboard() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const savedDateParam = searchParams.get("planSaved");
+  const savedDate = savedDateParam && /^\d{4}-\d{2}-\d{2}$/.test(savedDateParam) ? savedDateParam : null;
+  const [dismissedSavedDate, setDismissedSavedDate] = useState<string | null>(null);
+  const showPlanSaved = Boolean(savedDate && savedDate !== dismissedSavedDate);
   const today = toDateKey(new Date());
   const activeProfileId = useAppStore((state) => state.activeProfileId);
   const profiles = useAppStore((state) => state.profiles);
@@ -73,8 +81,25 @@ export function TodayDashboard() {
     recordMotivationExposure(today, motivation.kind);
   }, [motivation.kind, recordMotivationExposure, today]);
 
+  function closePlanSaved() {
+    setDismissedSavedDate(savedDate);
+    router.replace("/today", { scroll: false });
+  }
+
   return (
     <div className="page stack today-page">
+      {showPlanSaved && savedDate ? (
+        <div className="confirmation-backdrop">
+          <section className="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="plan-saved-title" aria-describedby="plan-saved-description">
+            <CheckCircle2 size={32} aria-hidden="true" />
+            <div>
+              <h2 id="plan-saved-title">Đã lưu kế hoạch ngày</h2>
+              <p id="plan-saved-description">Kế hoạch {format(fromDateKey(savedDate), "EEEE, d 'tháng' M", { locale: vi })} đã sẵn sàng. Bạn có thể theo dõi tiến độ ngay tại trang Hôm nay.</p>
+            </div>
+            <button className="button" type="button" autoFocus onClick={closePlanSaved}>Tiếp tục theo dõi</button>
+          </section>
+        </div>
+      ) : null}
       <PageHeader
         today
         title={`Hôm nay của ${profile.name}`}
@@ -90,7 +115,7 @@ export function TodayDashboard() {
         </div>}
       />
 
-      {day?.isRecoveryDay ? <div className="notice">Ngày phục hồi đang bật: không áp dụng điểm phạt và ngày này không làm mất chuỗi.</div> : null}
+      {day?.isRecoveryDay ? <div className="notice">Ngày phục hồi đang bật: ngày này không làm mất chuỗi hoạt động.</div> : null}
 
       <div className="today-top-grid">
         <QuickCheckpointCard date={today} tasks={tasks} checkpoint={checkpoint} checkpointTime={profile.preferences.checkpointTime} setupHref={setupHref} />
@@ -103,7 +128,7 @@ export function TodayDashboard() {
           <div className="motivation-next">
             <span>Nên làm tiếp</span>
             <strong>{nextTask?.title ?? "Thiết lập một việc rõ ràng cho hôm nay"}</strong>
-            {nextTask ? <small className="num">{nextTask.progress}% hoàn thành</small> : <Link className="text-action" href={setupHref}>Mở lịch để bắt đầu</Link>}
+            {nextTask ? <small className="num">{formatPercent(nextTask.progress)}% hoàn thành</small> : <Link className="text-action" href={setupHref}>Mở lịch để bắt đầu</Link>}
           </div>
         </section>
       </div>
@@ -141,7 +166,7 @@ export function TodayDashboard() {
             <div><h2 className="panel-title" id="performance-title">Hiệu suất 7 ngày</h2><p className="panel-note performance-finding">Hôm nay: {score.completed}/{score.total} việc hoàn thành · {completedHabits}/{habits.length} thói quen</p></div>
             <Link href="/insights" className="panel-note">Xem phân tích</Link>
           </div>
-          <TodayPerformance data={trend} percent={score.percent} earned={score.earned} planned={score.planned} />
+          <TodayPerformance data={trend} percent={score.percent} />
         </section>
 
         <aside className="today-summary span-4" aria-label="Tóm tắt hôm nay">
@@ -151,7 +176,7 @@ export function TodayDashboard() {
             <p>{remainingTasks.length === 0 ? "Không còn việc đang chờ xử lý." : `${topTasks.filter((task) => task.progress < 100).length} việc thuộc Top 3.`}</p>
           </div>
           <dl className="summary-metrics">
-            <div><dt>Điểm đạt</dt><dd className="num">{score.earned}<span>/{score.planned}</span></dd></div>
+            <div><dt>Tiến độ ngày</dt><dd className="num">{Math.round(score.percent)}<span>%</span></dd></div>
             <div><dt>Thói quen</dt><dd className="num">{completedHabits}<span>/{habits.length}</span></dd></div>
             <div><dt>Mục tiêu</dt><dd className="num">{activeGoals.length}</dd></div>
           </dl>
@@ -171,7 +196,7 @@ export function TodayDashboard() {
           <div className="task-list">
             {habits.length ? habits.map((habit) => {
               const log = habitLogs.find((item) => item.habitId === habit.id && item.date === today);
-              return <div className="habit-compact-row" key={habit.id}><div><strong>{habit.name}</strong><span>{habit.basePoints} điểm{log?.completion === "minimum" ? " · tối thiểu" : ""}</span></div><div className="task-actions"><button type="button" className={`button compact ${log ? "secondary" : ""}`} onClick={() => logHabit(habit.id, today, log ? null : "standard")}>{log ? "Bỏ đánh dấu" : "Hoàn thành"}</button>{habit.minimumVersion && !log ? <button type="button" className="button ghost compact" onClick={() => logHabit(habit.id, today, "minimum")}>Tối thiểu</button> : null}</div></div>;
+              return <div className="habit-compact-row" key={habit.id}><div><strong>{habitNameForDate(habit, today)}</strong><span>{habit.name}{log?.completion === "minimum" ? " · tối thiểu" : ""}</span></div><div className="task-actions"><button type="button" className={`button compact ${log ? "secondary" : ""}`} onClick={() => logHabit(habit.id, today, log ? null : "standard")}>{log ? "Bỏ đánh dấu" : "Hoàn thành"}</button>{habit.minimumVersion && !log ? <button type="button" className="button ghost compact" onClick={() => logHabit(habit.id, today, "minimum")}>Tối thiểu</button> : null}</div></div>;
             }) : <div className="empty-state">Chưa có thói quen đến lịch hôm nay.</div>}
           </div>
         </section>

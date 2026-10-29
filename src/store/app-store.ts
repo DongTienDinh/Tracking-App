@@ -15,8 +15,8 @@ import { fromDateKey, nowIso, toDateKey } from "@/lib/dates";
 import { migrateStorage, parseBackup } from "@/store/migrations";
 import { browserStorage, STORAGE_KEY } from "@/store/storage-adapter";
 
-type CreateTaskInput = Pick<DailyTask, "title" | "date" | "priority" | "isBinary"> & Partial<Pick<DailyTask, "category" | "description" | "goalId" | "note" | "isTopPriority">>;
-type CreateHabitInput = Pick<Habit, "name" | "category" | "scheduleType" | "basePoints" | "startDate"> & Partial<Pick<Habit, "weekdays" | "weeklyTarget" | "minimumVersion" | "goalId">>;
+type CreateTaskInput = Pick<DailyTask, "title" | "date" | "priority" | "isBinary"> & Partial<Pick<DailyTask, "category" | "description" | "goalId" | "note" | "isTopPriority">> & { checklist?: string[] };
+type CreateHabitInput = Pick<Habit, "name" | "category" | "scheduleType" | "basePoints" | "startDate"> & Partial<Pick<Habit, "weekdays" | "dayPlans" | "weeklyTarget" | "minimumVersion" | "goalId">>;
 type CreateGoalInput = Pick<Goal, "title" | "startDate"> & Partial<Pick<Goal, "description" | "why" | "targetDate">>;
 
 export interface AppState extends AppStorage {
@@ -30,6 +30,9 @@ export interface AppState extends AppStorage {
   addTask: (input: CreateTaskInput) => string;
   updateTask: (taskId: string, patch: Partial<DailyTask>) => void;
   setTaskProgress: (taskId: string, progress: Progress) => void;
+  addTaskChecklistItem: (taskId: string, title: string) => void;
+  toggleTaskChecklistItem: (taskId: string, itemId: string) => void;
+  deleteTaskChecklistItem: (taskId: string, itemId: string) => void;
   setTopPriority: (taskId: string, value: boolean) => boolean;
   deferTask: (taskId: string, toDate: string, reason: string) => string | null;
   skipTask: (taskId: string, reason: string) => void;
@@ -143,6 +146,7 @@ export const useAppStore = create<AppState>()(
             id, profileId: state.activeProfileId, taskChainId: id, title: input.title.trim(), date: input.date,
             priority: input.priority, category: input.category ?? "study", progress: 0, status: "planned", isBinary: input.isBinary,
             isTopPriority: Boolean(input.isTopPriority && topCount < 3), description: input.description,
+            checklist: input.checklist?.filter((title) => title.trim()).map((title) => ({ id: createId("check"), title: title.trim(), isCompleted: false })),
             goalId: input.goalId, note: input.note, createdAt: stamp, updatedAt: stamp,
           };
           return { tasks: [...state.tasks, task] };
@@ -151,13 +155,47 @@ export const useAppStore = create<AppState>()(
       },
       updateTask: (taskId, patch) => set((state) => ({ tasks: state.tasks.map((task) => task.id === taskId ? { ...task, ...patch, updatedAt: nowIso() } : task) })),
       setTaskProgress: (taskId, progress) => set((state) => ({
-        tasks: state.tasks.map((task) => task.id === taskId ? {
+        tasks: state.tasks.map((task) => {
+          if (task.id !== taskId) return task;
+          const safeProgress = Math.max(0, Math.min(100, progress));
+          const checklist = task.checklist?.length
+            ? task.checklist.map((item) => ({ ...item, isCompleted: safeProgress === 100 }))
+            : task.checklist;
+          return {
+            ...task,
+            checklist,
+            progress: checklist?.length ? (safeProgress === 100 ? 100 : 0) : safeProgress,
+            status: safeProgress === 100 ? "completed" : safeProgress === 0 ? "planned" : "in_progress",
+            completedAt: safeProgress === 100 ? nowIso() : undefined,
+            updatedAt: nowIso(),
+          };
+        }),
+      })),
+      addTaskChecklistItem: (taskId, title) => set((state) => ({
+        tasks: state.tasks.map((task) => task.id === taskId && title.trim() ? {
           ...task,
-          progress,
-          status: progress === 100 ? "completed" : progress === 0 ? "planned" : "in_progress",
-          completedAt: progress === 100 ? nowIso() : undefined,
+          checklist: [...(task.checklist ?? []), { id: createId("check"), title: title.trim(), isCompleted: false }],
+          progress: task.checklist?.length ? task.progress : 0,
+          status: task.checklist?.length ? task.status : "planned",
+          completedAt: task.checklist?.length ? task.completedAt : undefined,
           updatedAt: nowIso(),
         } : task),
+      })),
+      toggleTaskChecklistItem: (taskId, itemId) => set((state) => ({
+        tasks: state.tasks.map((task) => {
+          if (task.id !== taskId || !task.checklist?.length) return task;
+          const checklist = task.checklist.map((item) => item.id === itemId ? { ...item, isCompleted: !item.isCompleted } : item);
+          const progress = (checklist.filter((item) => item.isCompleted).length / checklist.length) * 100;
+          return { ...task, checklist, progress, status: progress === 100 ? "completed" : progress === 0 ? "planned" : "in_progress", completedAt: progress === 100 ? nowIso() : undefined, updatedAt: nowIso() };
+        }),
+      })),
+      deleteTaskChecklistItem: (taskId, itemId) => set((state) => ({
+        tasks: state.tasks.map((task) => {
+          if (task.id !== taskId || !task.checklist) return task;
+          const checklist = task.checklist.filter((item) => item.id !== itemId);
+          const progress = checklist.length ? (checklist.filter((item) => item.isCompleted).length / checklist.length) * 100 : 0;
+          return { ...task, checklist, progress, status: progress === 100 ? "completed" : progress === 0 ? "planned" : "in_progress", completedAt: progress === 100 ? nowIso() : undefined, updatedAt: nowIso() };
+        }),
       })),
       setTopPriority: (taskId, value) => {
         const task = get().tasks.find((item) => item.id === taskId);
@@ -174,6 +212,7 @@ export const useAppStore = create<AppState>()(
         const stamp = nowIso();
         const next: DailyTask = {
           ...current, id: newId, date: toDate, progress: 0, status: "planned", isTopPriority: false,
+          checklist: current.checklist?.map((item) => ({ ...item, id: createId("check"), isCompleted: false })),
           deferReason: undefined, deferredTo: undefined, createdAt: stamp, updatedAt: stamp, completedAt: undefined,
         };
         set((state) => ({
@@ -184,7 +223,7 @@ export const useAppStore = create<AppState>()(
       },
       skipTask: (taskId, reason) => set((state) => ({ tasks: state.tasks.map((task) => task.id === taskId ? { ...task, status: "skipped", progress: 0, skipReason: reason, isTopPriority: false, updatedAt: nowIso() } : task) })),
       deleteTask: (taskId) => set((state) => ({ tasks: state.tasks.filter((task) => task.id !== taskId) })),
-      addHabit: (input) => set((state) => ({ habits: [...state.habits, { id: createId("habit"), profileId: state.activeProfileId, name: input.name.trim(), category: input.category, scheduleType: input.scheduleType, weekdays: input.weekdays, weeklyTarget: input.weeklyTarget, basePoints: input.basePoints, minimumVersion: input.minimumVersion, goalId: input.goalId, startDate: input.startDate, isActive: true, createdAt: nowIso() }] })),
+      addHabit: (input) => set((state) => ({ habits: [...state.habits, { id: createId("habit"), profileId: state.activeProfileId, name: input.name.trim(), category: input.category, scheduleType: input.scheduleType, weekdays: input.weekdays, dayPlans: input.dayPlans, weeklyTarget: input.weeklyTarget, basePoints: input.basePoints, minimumVersion: input.minimumVersion, goalId: input.goalId, startDate: input.startDate, isActive: true, createdAt: nowIso() }] })),
       updateHabit: (habitId, patch) => set((state) => ({ habits: state.habits.map((habit) => habit.id === habitId ? { ...habit, ...patch } : habit) })),
       deleteHabit: (habitId) => set((state) => ({ habits: state.habits.filter((habit) => habit.id !== habitId), habitLogs: state.habitLogs.filter((log) => log.habitId !== habitId) })),
       logHabit: (habitId, date, completion) => set((state) => {

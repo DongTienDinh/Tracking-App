@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
@@ -11,11 +12,12 @@ import { DailyReviewPanel } from "@/components/tasks/daily-review";
 import { QuickAddTask } from "@/components/tasks/quick-add-task";
 import { TaskRow } from "@/components/tasks/task-row";
 import { calculateDailyScore } from "@/domain/scoring";
-import { isHabitDue } from "@/domain/scheduling";
+import { habitNameForDate, isHabitDue } from "@/domain/scheduling";
 import { fromDateKey } from "@/lib/dates";
 import { useAppStore } from "@/store/app-store";
 
 export function DaySetupWorkspace({ date }: { date: string }) {
+  const router = useRouter();
   const [trackingOpen, setTrackingOpen] = useState(() => typeof window !== "undefined" && window.location.hash === "#checkpoint");
   const activeProfileId = useAppStore((state) => state.activeProfileId);
   const allTasks = useAppStore((state) => state.tasks);
@@ -54,6 +56,11 @@ export function DaySetupWorkspace({ date }: { date: string }) {
     if (topTasks.length < 3) setTopPriority(id, true);
   }
 
+  function confirmAndOpenToday() {
+    confirmPlan(date);
+    router.push(`/today?planSaved=${date}`);
+  }
+
   return (
     <section className="day-setup calendar-day-setup" id="day-setup" aria-labelledby="day-setup-title">
       <div className="day-setup-heading">
@@ -69,7 +76,7 @@ export function DaySetupWorkspace({ date }: { date: string }) {
         </details>
       </div>
 
-      {day?.isRecoveryDay ? <div className="recovery-note">Ngày phục hồi đang bật: không tính phạt và không làm mất chuỗi.</div> : null}
+      {day?.isRecoveryDay ? <div className="recovery-note">Ngày phục hồi đang bật: ngày này không làm mất chuỗi hoạt động.</div> : null}
 
       <div className="day-setup-facts" aria-label="Tóm tắt thiết lập ngày">
         <span><strong className="num">{tasks.length}</strong> việc</span>
@@ -89,8 +96,8 @@ export function DaySetupWorkspace({ date }: { date: string }) {
             {tasks.length ? tasks.map((task) => <TaskRow task={task} goals={goals} variant="setup" key={task.id} />) : <div className="empty-state">Chưa có việc nào. Hãy thêm một kết quả cụ thể cho ngày này.</div>}
           </div>
           <div className="day-plan-footer">
-            <span className="panel-note num">{tasks.length} việc · {score.earned}/{score.planned} điểm</span>
-            <button className="button" type="button" disabled={tasks.length === 0} onClick={() => confirmPlan(date)}>{day?.planConfirmedAt ? "Cập nhật kế hoạch" : "Xác nhận kế hoạch"}</button>
+            <span className="panel-note num">{tasks.length} việc · {Math.round(score.percent)}% hoàn thành</span>
+            <button className="button" type="button" disabled={tasks.length === 0} onClick={confirmAndOpenToday}>{day?.planConfirmedAt ? "Cập nhật kế hoạch" : "Xác nhận kế hoạch"}</button>
           </div>
         </section>
 
@@ -99,7 +106,7 @@ export function DaySetupWorkspace({ date }: { date: string }) {
           <div className="task-list">
             {habits.length ? habits.map((habit) => {
               const log = habitLogs.find((item) => item.habitId === habit.id && item.date === date);
-              return <div className="habit-compact-row" key={habit.id}><div><strong>{habit.name}</strong><span>{habit.basePoints} điểm{log?.completion === "minimum" ? " · tối thiểu" : ""}</span></div><div className="task-actions"><button type="button" className={`button compact ${log ? "secondary" : ""}`} onClick={() => logHabit(habit.id, date, log ? null : "standard")}>{log ? "Bỏ đánh dấu" : "Hoàn thành"}</button>{habit.minimumVersion && !log ? <button type="button" className="button ghost compact" onClick={() => logHabit(habit.id, date, "minimum")}>Tối thiểu</button> : null}</div></div>;
+              return <div className="habit-compact-row" data-completed={Boolean(log)} key={habit.id}><div><strong>{habitNameForDate(habit, date)}</strong><span>{habit.name}{log?.completion === "minimum" ? " · tối thiểu" : ""}</span></div><div className="task-actions"><button type="button" className={`button compact ${log ? "secondary" : ""}`} onClick={() => logHabit(habit.id, date, log ? null : "standard")}>{log ? "Bỏ đánh dấu" : "Hoàn thành"}</button>{habit.minimumVersion && !log ? <button type="button" className="button ghost compact" onClick={() => logHabit(habit.id, date, "minimum")}>Tối thiểu</button> : null}</div></div>;
             }) : <div className="empty-state"><span>Không có thói quen đến lịch.</span><Link className="text-action" href="/habits">Thiết lập thói quen</Link></div>}
           </div>
         </aside>

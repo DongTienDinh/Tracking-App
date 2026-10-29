@@ -36,9 +36,9 @@ function MonthView({ date, onOpenDay }: { date: Date; onOpenDay: (value: string)
           const score = calculateDailyScore(dayTasks, days.find((entry) => entry.profileId === activeProfileId && entry.date === key));
           const state = score.total === 0 ? "empty" : score.percent >= 70 ? "good" : score.percent >= 35 ? "warning" : "bad";
           return (
-            <button type="button" role="gridcell" className={`calendar-day${!isSameMonth(item, date) ? " outside" : ""}${key === today ? " today" : ""}`} key={key} onClick={() => onOpenDay(key)} aria-label={`${format(item, "d MMMM", { locale: vi })}, ${score.completed}/${score.total} công việc, ${score.earned} điểm`}>
+            <button type="button" role="gridcell" className={`calendar-day${!isSameMonth(item, date) ? " outside" : ""}${key === today ? " today" : ""}`} key={key} onClick={() => onOpenDay(key)} aria-label={`${format(item, "d MMMM", { locale: vi })}, ${score.completed}/${score.total} công việc, ${Math.round(score.percent)}% hoàn thành`}>
               <div className="panel-title-row" style={{ marginBottom: 10 }}><span className="num">{format(item, "d")}</span><span className={`status ${state === "empty" ? "" : state}`}>{state === "empty" ? "—" : `${Math.round(score.percent)}%`}</span></div>
-              <div className="calendar-detail"><strong className="num">{score.completed}/{score.total}</strong><div className="panel-note num">{score.earned} điểm</div></div>
+              <div className="calendar-detail"><strong className="num">{score.completed}/{score.total}</strong><div className="panel-note num">{Math.round(score.percent)}% kế hoạch</div></div>
             </button>
           );
         })}

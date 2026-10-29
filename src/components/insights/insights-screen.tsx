@@ -12,13 +12,12 @@ import { habitStreak } from "@/domain/streaks";
 import { HABIT_CATEGORIES, useAppStore } from "@/store/app-store";
 
 function ScoreChart({ data }: { data: DailyInsight[] }) {
-  const max = Math.max(1, ...data.map((item) => Math.max(item.planned, item.earned)));
   const points = data.map((item, index) => {
     const x = 40 + index * (540 / Math.max(1, data.length - 1));
-    const y = 155 - (Math.max(0, item.earned) / max) * 125;
+    const y = 155 - (item.percent / 100) * 125;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(" ");
-  return <figure style={{ margin: 0 }}><svg className="chart" viewBox="0 0 620 190" role="img" aria-labelledby="score-chart-title score-chart-desc"><title id="score-chart-title">Điểm mỗi ngày trong 30 ngày</title><desc id="score-chart-desc">Điểm thấp nhất {Math.min(...data.map((item) => item.earned))}, cao nhất {Math.max(...data.map((item) => item.earned))}.</desc>{[30, 72, 114, 155].map((y) => <line x1="40" x2="580" y1={y} y2={y} className="chart-grid" key={y} />)}<polyline points={points} fill="none" stroke="var(--accent)" strokeWidth="3" strokeLinejoin="round" />{data.filter((_, index) => index % 7 === 0 || index === data.length - 1).map((item) => { const index = data.indexOf(item); return <text x={40 + index * (540 / Math.max(1, data.length - 1))} y="178" textAnchor="middle" key={item.date}>{item.date.slice(5)}</text>; })}</svg><details className="chart-data"><summary>Xem bảng dữ liệu 30 ngày</summary><table><thead><tr><th>Ngày</th><th>Điểm đạt</th><th>Điểm kế hoạch</th></tr></thead><tbody>{data.map((item) => <tr key={item.date}><td>{item.date}</td><td>{item.earned}</td><td>{item.planned}</td></tr>)}</tbody></table></details></figure>;
+  return <figure style={{ margin: 0 }}><svg className="chart" viewBox="0 0 620 190" role="img" aria-labelledby="score-chart-title score-chart-desc"><title id="score-chart-title">Tỷ lệ hoàn thành mỗi ngày trong 30 ngày</title><desc id="score-chart-desc">Thấp nhất {Math.round(Math.min(...data.map((item) => item.percent)))}%, cao nhất {Math.round(Math.max(...data.map((item) => item.percent)))}%.</desc>{[30, 72, 114, 155].map((y) => <line x1="40" x2="580" y1={y} y2={y} className="chart-grid" key={y} />)}<polyline points={points} fill="none" stroke="var(--accent)" strokeWidth="3" strokeLinejoin="round" />{data.filter((_, index) => index % 7 === 0 || index === data.length - 1).map((item) => { const index = data.indexOf(item); return <text x={40 + index * (540 / Math.max(1, data.length - 1))} y="178" textAnchor="middle" key={item.date}>{item.date.slice(5)}</text>; })}</svg><details className="chart-data"><summary>Xem bảng dữ liệu 30 ngày</summary><table><thead><tr><th>Ngày</th><th>Hoàn thành</th><th>Số việc</th></tr></thead><tbody>{data.map((item) => <tr key={item.date}><td>{item.date}</td><td>{Math.round(item.percent)}%</td><td>{item.completed}/{item.total}</td></tr>)}</tbody></table></details></figure>;
 }
 
 function WeeklyBars({ data }: { data: DailyInsight[] }) {
@@ -52,7 +51,8 @@ export function InsightsScreen() {
   const currentCompleted = sevenDays.reduce((sum, day) => sum + day.completed, 0);
   const currentTotal = sevenDays.reduce((sum, day) => sum + day.total, 0);
   const previousCompleted = previousSeven.reduce((sum, day) => sum + day.completed, 0);
-  const currentScore = sevenDays.reduce((sum, day) => sum + day.earned, 0);
+  const daysWithPlan = sevenDays.filter((day) => day.total > 0);
+  const averageCompletion = daysWithPlan.length ? daysWithPlan.reduce((sum, day) => sum + day.percent, 0) / daysWithPlan.length : 0;
   const issueCount = tasks.filter((task) => task.status === "deferred" || task.status === "skipped").length;
   const bestHabit = habits.map((habit) => ({ name: habit.name, streak: habitStreak(habit, logs, days, format(today, "yyyy-MM-dd")) })).toSorted((a, b) => b.streak - a.streak)[0];
 
@@ -61,15 +61,15 @@ export function InsightsScreen() {
       <PageHeader title="Thống kê" subtitle="Mọi nhận xét và biểu đồ được tính trực tiếp từ dữ liệu của hồ sơ hiện tại." />
       <section className="panel tonal weekly-report" aria-labelledby="weekly-report-title">
         <div><h2 className="panel-title" id="weekly-report-title">Báo cáo 7 ngày</h2><p className="weekly-finding">{currentCompleted >= previousCompleted ? `Bạn hoàn thành nhiều hơn giai đoạn trước ${currentCompleted - previousCompleted} việc.` : `Bạn hoàn thành ít hơn giai đoạn trước ${previousCompleted - currentCompleted} việc; hãy giảm số việc quan trọng mỗi ngày.`}</p></div>
-        <dl><div><dt>Hoàn thành</dt><dd className="num">{currentCompleted}/{currentTotal}</dd></div><div><dt>Điểm</dt><dd className="num">{currentScore}</dd></div><div><dt>Chuỗi nổi bật</dt><dd>{bestHabit ? `${bestHabit.name} · ${bestHabit.streak}` : "—"}</dd></div><div><dt>Cần xem lại</dt><dd className="num">{issueCount} việc hoãn/bỏ</dd></div></dl>
+        <dl><div><dt>Hoàn thành</dt><dd className="num">{currentCompleted}/{currentTotal}</dd></div><div><dt>Tỷ lệ trung bình</dt><dd className="num">{Math.round(averageCompletion)}%</dd></div><div><dt>Chuỗi nổi bật</dt><dd>{bestHabit ? `${bestHabit.name} · ${bestHabit.streak}` : "—"}</dd></div><div><dt>Cần xem lại</dt><dd className="num">{issueCount} việc hoãn/bỏ</dd></div></dl>
       </section>
 
       <div className="grid-12">
         <section className="panel span-6"><div className="panel-title-row"><h2 className="panel-title">Tỷ lệ hoàn thành theo tuần</h2><span className="panel-note">7 ngày gần nhất</span></div><WeeklyBars data={sevenDays} /></section>
-        <section className="panel span-6"><div className="panel-title-row"><h2 className="panel-title">Kế hoạch và thực tế</h2><span className="panel-note">Điểm đạt / điểm kế hoạch</span></div><div className="stack">{sevenDays.map((item) => <div key={item.date}><div className="panel-title-row" style={{ marginBottom: 7 }}><span>{format(new Date(`${item.date}T12:00:00`), "EEE d/M", { locale: vi })}</span><span className="num">{item.earned}/{item.planned}</span></div><ProgressBar value={item.planned ? (Math.max(0, item.earned) / item.planned) * 100 : 0} label={`Thực tế so với kế hoạch ${item.date}`} /></div>)}</div></section>
+        <section className="panel span-6"><div className="panel-title-row"><h2 className="panel-title">Kế hoạch và thực tế</h2><span className="panel-note">Tỷ lệ hoàn thành theo ngày</span></div><div className="stack">{sevenDays.map((item) => <div key={item.date}><div className="panel-title-row" style={{ marginBottom: 7 }}><span>{format(new Date(`${item.date}T12:00:00`), "EEE d/M", { locale: vi })}</span><span className="num">{Math.round(item.percent)}%</span></div><ProgressBar value={item.percent} label={`Hoàn thành kế hoạch ${item.date}`} /></div>)}</div></section>
       </div>
 
-      <section className="panel"><div className="panel-title-row"><h2 className="panel-title">Điểm 30 ngày</h2><span className="panel-note">Một đường, một thang đo</span></div><ScoreChart data={thirtyDays} /></section>
+      <section className="panel"><div className="panel-title-row"><h2 className="panel-title">Tiến độ 30 ngày</h2><span className="panel-note">Phần trăm hoàn thành kế hoạch</span></div><ScoreChart data={thirtyDays} /></section>
 
       <div className="grid-12">
         <section className="panel span-4"><div className="panel-title-row"><h2 className="panel-title">Lịch nhiệt hoạt động</h2><span className="panel-note">12 tuần</span></div><div className="heatmap" role="img" aria-label="Mức hoạt động theo ngày trong 12 tuần">{Array.from({ length: 84 }, (_, index) => { const date = subDays(today, 83 - index); const key = format(date, "yyyy-MM-dd"); const day = thirtyDays.find((item) => item.date === key); const activity = day?.activity ?? logs.filter((log) => log.date === key).length; return <span className="heat-cell" data-level={activity === 0 ? 0 : activity <= 2 ? 1 : activity <= 4 ? 2 : 3} title={`${key}: ${activity} hoạt động`} key={key} />; })}</div><p className="panel-note" style={{ marginTop: 14 }}>Ô đậm hơn nghĩa là có nhiều task hoặc habit hoàn thành hơn.</p></section>

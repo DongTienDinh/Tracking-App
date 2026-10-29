@@ -6,6 +6,7 @@ import { Check, Circle, Clock3 } from "lucide-react";
 import type { DailyTask, MiddayCheckpoint } from "@/domain/types";
 import { buildCheckpointSummary } from "@/domain/checkpoint";
 import { useAppStore } from "@/store/app-store";
+import { formatPercent } from "@/lib/numbers";
 
 export function QuickCheckpointCard({
   date,
@@ -73,7 +74,7 @@ export function QuickCheckpointCard({
                 onChange={() => setTaskProgress(task.id, task.progress === 100 ? 0 : 100)}
               />
               <span>{task.title}</span>
-              {task.progress > 0 && task.progress < 100 ? <small className="num">{task.progress}%</small> : null}
+              {task.progress > 0 && task.progress < 100 ? <small className="num">{formatPercent(task.progress)}%</small> : null}
             </label>
           ))}
         </fieldset>

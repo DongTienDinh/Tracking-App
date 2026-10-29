@@ -44,7 +44,7 @@ export function chooseMotivation(
   const next = todayTasks.find((task) => task.isTopPriority) ?? todayTasks[0];
   candidates.push(next
     ? { kind: "next-action", text: `Việc nên làm tiếp theo: ${next.title}.` }
-    : { kind: "next-action", text: "Bắt đầu bằng một việc nhỏ 5–10 điểm để tạo đà cho hôm nay." });
+    : { kind: "next-action", text: "Bắt đầu bằng một việc nhỏ, rõ ràng để tạo đà cho hôm nay." });
   candidates.push(todayTasks.length
     ? { kind: "volume", text: `Hôm nay còn ${todayTasks.length} việc đang mở. Hoàn thành một việc trước khi thêm việc mới.` }
     : { kind: "volume", text: "Hôm nay chưa có việc cần xử lý. Hãy lên một kế hoạch nhỏ và thực tế." });

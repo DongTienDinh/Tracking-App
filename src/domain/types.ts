@@ -1,8 +1,9 @@
 export type Priority = "normal" | "medium" | "important" | "critical";
-export type Progress = 0 | 25 | 50 | 75 | 100;
+export type Progress = number;
 export type TaskStatus = "planned" | "in_progress" | "completed" | "deferred" | "skipped";
 export type EnergyLevel = "low" | "medium" | "good";
 export type HabitCategory = "study" | "fitness" | "personal" | "other";
+export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 export type CalendarView = "month" | "week" | "day";
 export type ThemeMode = "light" | "dark";
 export type ThemeChoice = "default" | "auto" | "spring" | "summer" | "autumn" | "winter" | "tet" | "christmas" | "national-day";
@@ -55,6 +56,7 @@ export interface DailyTask {
   status: TaskStatus;
   isBinary: boolean;
   isTopPriority: boolean;
+  checklist?: TaskChecklistItem[];
   goalId?: string;
   habitId?: string;
   note?: string;
@@ -64,6 +66,12 @@ export interface DailyTask {
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
+}
+
+export interface TaskChecklistItem {
+  id: string;
+  title: string;
+  isCompleted: boolean;
 }
 
 export interface TaskDeferral {
@@ -85,6 +93,7 @@ export interface Habit {
   category: HabitCategory;
   scheduleType: "fixed_days" | "weekly_target";
   weekdays?: number[];
+  dayPlans?: { weekday: Weekday; name: string }[];
   weeklyTarget?: number;
   basePoints: number;
   minimumVersion?: { label: string; pointMultiplier: 0.5 };

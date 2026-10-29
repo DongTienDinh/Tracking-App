@@ -1,11 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Star, Trash2 } from "lucide-react";
 import type { DailyTask, Goal, HabitCategory, Priority, Progress } from "@/domain/types";
+import { formatPercent } from "@/lib/numbers";
 import { DEFAULT_DEFER_REASON, DEFAULT_SKIP_REASONS, HABIT_CATEGORIES, PRIORITY_LABELS, tomorrowKey, useAppStore } from "@/store/app-store";
 
 const progressValues: Progress[] = [0, 25, 50, 75, 100];
+
+function TaskChecklist({ task }: { task: DailyTask }) {
+  const [title, setTitle] = useState("");
+  const addItem = useAppStore((state) => state.addTaskChecklistItem);
+  const toggleItem = useAppStore((state) => state.toggleTaskChecklistItem);
+  const deleteItem = useAppStore((state) => state.deleteTaskChecklistItem);
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!title.trim()) return;
+    addItem(task.id, title);
+    setTitle("");
+  }
+
+  return (
+    <div className="task-checklist" aria-label={`Checklist ${task.title}`}>
+      {task.checklist?.map((item) => (
+        <div className="task-checklist-item" key={item.id}>
+          <label>
+            <input type="checkbox" checked={item.isCompleted} onChange={() => toggleItem(task.id, item.id)} />
+            <span>{item.title}</span>
+          </label>
+          <button type="button" className="button ghost compact icon-button" aria-label={`Xóa mục ${item.title}`} onClick={() => deleteItem(task.id, item.id)}><Trash2 size={14} aria-hidden="true" /></button>
+        </div>
+      ))}
+      <form className="task-checklist-add" onSubmit={submit}>
+        <input className="input" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Thêm một mục nhỏ…" maxLength={160} aria-label={`Thêm checklist cho ${task.title}`} />
+        <button className="button secondary compact" type="submit" disabled={!title.trim()}>Thêm mục</button>
+      </form>
+    </div>
+  );
+}
 
 export function TaskRow({ task, goals, variant = "full" }: { task: DailyTask; goals: Goal[]; variant?: "full" | "setup" }) {
   const [reason, setReason] = useState<(typeof DEFAULT_SKIP_REASONS)[number]>("Thiếu thời gian");
@@ -18,7 +51,7 @@ export function TaskRow({ task, goals, variant = "full" }: { task: DailyTask; go
   const goal = goals.find((item) => item.id === task.goalId);
   const isActionable = task.status !== "deferred" && task.status !== "skipped";
 
-  const progressControl = task.isBinary ? (
+  const progressControl = task.checklist?.length ? null : task.isBinary ? (
     <label className="button secondary compact">
       <input className="checkbox" type="checkbox" name={`complete-${task.id}`} checked={task.progress === 100} onChange={(event) => setProgress(task.id, event.target.checked ? 100 : 0)} /> Xong
     </label>
@@ -36,12 +69,18 @@ export function TaskRow({ task, goals, variant = "full" }: { task: DailyTask; go
 
   if (variant === "setup") {
     return (
-      <article className="task-row setup-task-row" data-testid="task-row">
+      <article
+        className="task-row setup-task-row"
+        data-testid="task-row"
+        data-priority={task.priority}
+        data-top-priority={task.isTopPriority || undefined}
+        data-complete={task.progress === 100 || undefined}
+      >
         <div className="task-main">
           <div className="task-title">{task.title}</div>
           <div className="task-meta">
-            <span>{PRIORITY_LABELS[task.priority]}</span>
-            <span className="num">{task.progress}%</span>
+            <span className="task-priority">{PRIORITY_LABELS[task.priority]}</span>
+            <span className="num">{formatPercent(task.progress)}%</span>
             {goal ? <span>{goal.title}</span> : null}
             {task.status === "deferred" ? <span className="status warning">Đã hoãn đến {task.deferredTo}</span> : null}
             {task.status === "skipped" ? <span className="status bad">Đã bỏ · {task.skipReason}</span> : null}
@@ -50,6 +89,7 @@ export function TaskRow({ task, goals, variant = "full" }: { task: DailyTask; go
         <div className="task-actions setup-task-actions">
           {isActionable ? <>{progressControl}{topPriorityControl}</> : null}
         </div>
+        {task.checklist?.length ? <TaskChecklist task={task} /> : null}
         <details className="task-adjustments">
           <summary aria-label={`Tùy chỉnh ${task.title}`}>Tùy chỉnh</summary>
           {isActionable ? (
@@ -77,6 +117,10 @@ export function TaskRow({ task, goals, variant = "full" }: { task: DailyTask; go
                 <label htmlFor={`note-${task.id}`}>Ghi chú</label>
                 <textarea id={`note-${task.id}`} name={`note-${task.id}`} autoComplete="off" className="textarea" defaultValue={task.note ?? ""} onBlur={(event) => updateTask(task.id, { note: event.target.value })} placeholder="Đầu ra mong đợi hoặc trở ngại…" />
               </div>
+              <div className="field task-adjustment-checklist">
+                <span className="field-label">Checklist nhỏ</span>
+                {task.checklist?.length ? <span className="field-hint">Có {task.checklist.length} mục; chỉnh trực tiếp ở phía trên.</span> : <TaskChecklist task={task} />}
+              </div>
               <div className="field">
                 <label htmlFor={`reason-${task.id}`}>Lý do nếu hoãn hoặc bỏ</label>
                 <select id={`reason-${task.id}`} name={`reason-${task.id}`} autoComplete="off" className="select" value={reason} onChange={(event) => setReason(event.target.value as (typeof DEFAULT_SKIP_REASONS)[number])}>
@@ -95,13 +139,19 @@ export function TaskRow({ task, goals, variant = "full" }: { task: DailyTask; go
   }
 
   return (
-    <article className="task-row" data-testid="task-row">
+    <article
+      className="task-row"
+      data-testid="task-row"
+      data-priority={task.priority}
+      data-top-priority={task.isTopPriority || undefined}
+      data-complete={task.progress === 100 || undefined}
+    >
       <div className="task-main">
         <div className="task-title">{task.title}</div>
         <div className="task-meta">
-          <span>{PRIORITY_LABELS[task.priority]}</span>
+          <span className="task-priority">{PRIORITY_LABELS[task.priority]}</span>
           <span>{HABIT_CATEGORIES[task.category]}</span>
-          <span className="num">{task.progress}%</span>
+          <span className="num">{formatPercent(task.progress)}%</span>
           {goal ? <span>{goal.title}</span> : null}
           {task.status === "deferred" ? <span className="status warning">Đã hoãn đến {task.deferredTo}</span> : null}
           {task.status === "skipped" ? <span className="status bad">Đã bỏ · {task.skipReason}</span> : null}
@@ -119,6 +169,7 @@ export function TaskRow({ task, goals, variant = "full" }: { task: DailyTask; go
             </div>
           </details>
         ) : null}
+        {task.checklist?.length ? <TaskChecklist task={task} /> : null}
       </div>
       <div className="task-actions">
         {isActionable ? (

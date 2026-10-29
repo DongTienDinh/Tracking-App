@@ -7,7 +7,7 @@ import { HABIT_CATEGORIES, PRIORITY_LABELS } from "@/store/app-store";
 export function QuickAddTask({ date, goals, onAdd, label = "Thêm việc" }: {
   date: string;
   goals: Goal[];
-  onAdd: (input: { title: string; date: string; priority: Priority; category: HabitCategory; isBinary: boolean; goalId?: string }) => void;
+  onAdd: (input: { title: string; date: string; priority: Priority; category: HabitCategory; isBinary: boolean; goalId?: string; checklist?: string[] }) => void;
   label?: string;
 }) {
   const [title, setTitle] = useState("");
@@ -15,12 +15,15 @@ export function QuickAddTask({ date, goals, onAdd, label = "Thêm việc" }: {
   const [category, setCategory] = useState<HabitCategory>("study");
   const [goalId, setGoalId] = useState("");
   const [isBinary, setIsBinary] = useState(true);
+  const [checklistText, setChecklistText] = useState("");
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!title.trim()) return;
-    onAdd({ title: title.trim(), date, priority, category, isBinary, goalId: goalId || undefined });
+    const checklist = checklistText.split("\n").map((item) => item.trim()).filter(Boolean);
+    onAdd({ title: title.trim(), date, priority, category, isBinary: checklist.length ? false : isBinary, goalId: goalId || undefined, checklist: checklist.length ? checklist : undefined });
     setTitle("");
+    setChecklistText("");
   }
 
   return (
@@ -58,6 +61,19 @@ export function QuickAddTask({ date, goals, onAdd, label = "Thêm việc" }: {
             <input type="checkbox" name={`progressive-${date}`} checked={!isBinary} onChange={(event) => setIsBinary(!event.target.checked)} />
             Theo tiến độ (25/50/75/100%)
           </label>
+          <div className="field quick-add-checklist">
+            <label htmlFor={`task-checklist-${date}`}>Checklist nhỏ (mỗi dòng một mục)</label>
+            <textarea
+              id={`task-checklist-${date}`}
+              name={`taskChecklist-${date}`}
+              className="textarea"
+              value={checklistText}
+              onChange={(event) => setChecklistText(event.target.value)}
+              placeholder={"Ví dụ:\nChuẩn bị dữ liệu\nChạy thử mô hình\nGhi lại kết quả"}
+              maxLength={1200}
+            />
+            <span className="field-hint">Tiến độ công việc sẽ tự tính theo số mục đã hoàn thành.</span>
+          </div>
         </div>
       </details>
     </form>

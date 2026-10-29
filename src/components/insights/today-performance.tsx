@@ -5,14 +5,12 @@ import type { DailyInsight } from "@/domain/insights";
 interface TodayPerformanceProps {
   data: DailyInsight[];
   percent: number;
-  earned: number;
-  planned: number;
 }
 
-export function TodayPerformance({ data, percent, earned, planned }: TodayPerformanceProps) {
+export function TodayPerformance({ data, percent }: TodayPerformanceProps) {
   const boundedPercent = Math.max(0, Math.min(100, Math.round(percent)));
   const circumference = 2 * Math.PI * 48;
-  const maxPoints = Math.max(1, ...data.flatMap((item) => [item.planned, Math.max(0, item.earned)]));
+  const today = data.at(-1);
 
   return (
     <div className="performance-visual">
@@ -29,26 +27,26 @@ export function TodayPerformance({ data, percent, earned, planned }: TodayPerfor
         </svg>
         <div className="performance-dial-copy">
           <strong className="num">{boundedPercent}%</strong>
-          <span>{planned > 0 ? `${earned}/${planned} điểm` : "Chưa có kế hoạch"}</span>
+          <span>{today?.total ? `${today.completed}/${today.total} việc hoàn tất` : "Chưa có kế hoạch"}</span>
         </div>
       </div>
 
       <figure className="today-chart">
         <div className="chart-legend" aria-hidden="true">
-          <span><i className="legend-mark earned" />Đạt được</span>
-          <span><i className="legend-mark planned" />Kế hoạch</span>
+          <span><i className="legend-mark earned" />Hoàn thành</span>
+          <span><i className="legend-mark planned" />Mục tiêu 100%</span>
         </div>
         <svg className="chart" viewBox="0 0 620 210" role="img" aria-labelledby="today-trend-title today-trend-desc">
-          <title id="today-trend-title">Điểm đạt được trong bảy ngày gần nhất</title>
-          <desc id="today-trend-desc">{data.map((item) => `${item.date}: ${item.earned}/${item.planned} điểm`).join("; ")}</desc>
+          <title id="today-trend-title">Tỷ lệ hoàn thành trong bảy ngày gần nhất</title>
+          <desc id="today-trend-desc">{data.map((item) => `${item.date}: ${Math.round(item.percent)}%`).join("; ")}</desc>
           {[44, 104, 164].map((y) => <line key={y} x1="46" y1={y} x2="606" y2={y} className="chart-grid" />)}
-          <text x="36" y="48" textAnchor="end">{maxPoints}</text>
-          <text x="36" y="108" textAnchor="end">{Number.isInteger(maxPoints / 2) ? maxPoints / 2 : (maxPoints / 2).toFixed(1)}</text>
+          <text x="36" y="48" textAnchor="end">100%</text>
+          <text x="36" y="108" textAnchor="end">50%</text>
           <text x="36" y="168" textAnchor="end">0</text>
           {data.map((item, index) => {
             const x = 62 + index * 76;
-            const plannedHeight = (item.planned / maxPoints) * 120;
-            const earnedHeight = (Math.max(0, item.earned) / maxPoints) * 120;
+            const plannedHeight = item.total ? 120 : 0;
+            const earnedHeight = (Math.max(0, item.percent) / 100) * 120;
             return (
               <g key={item.date}>
                 <rect x={x} y={164 - plannedHeight} width="38" height={plannedHeight} className="chart-plan" />
